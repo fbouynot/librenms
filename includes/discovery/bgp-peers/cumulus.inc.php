@@ -1,12 +1,12 @@
 <?php
 
 use App\Facades\LibrenmsConfig;
+use LibreNMS\Util\IP;
 
 $bgpPeers = \SnmpQuery::enumStrings()->hideMib()->walk('CUMULUS-BGPVRF-MIB::bgpPeerTable')->mapTable(
-    function ($data, $vrfId, $peerIdType, $ifFace) {
+    function ($data, $vrfId) {
         $data['vrfId'] = $vrfId;
-        $data['peerIdType'] = $peerIdType;
-        $data['ifIndex'] = explode('.', (string) $ifFace)[4];
+        $data['ifIndex'] = ($data['bgpPeerIfindex'] ?? 0) ?: null; // the table index only holds part of it
 
         return $data;
     });
@@ -51,7 +51,8 @@ foreach ($bgpPeers as $bgpPeer) {
 
         DeviceCache::getPrimary()->bgppeers()->create($peers);
 
-        if (LibrenmsConfig::get('autodiscovery.bgp')) {
+        // a peer that never came up reports bgpPeerRemoteAddr "Unknown"
+        if (LibrenmsConfig::get('autodiscovery.bgp') && IP::isValid($bgpPeer['bgpPeerRemoteAddr'])) {
             $name = gethostbyaddr($bgpPeer['bgpPeerRemoteAddr']);
             discover_new_device($name, $device, 'BGP');
         }
@@ -59,9 +60,10 @@ foreach ($bgpPeers as $bgpPeer) {
     } else {
         $peers = [
             'bgpPeerRemoteAs' => $bgpPeer['bgpPeerRemoteAs'],
+            'bgpPeerIface' => $bgpPeer['ifIndex'],
             'astext' => $astext,
         ];
-        $affected = DeviceCache::getPrimary()->bgppeers()->where('bgpPeer_id', $bgpPeer['bgpPeerIdentifier'])->update($peers);
+        $affected = DeviceCache::getPrimary()->bgppeers()->where('bgpPeerIdentifier', $bgpPeer['bgpPeerIdentifier'])->where('vrf_id', $vrfId)->update($peers);
         echo str_repeat('.', $affected);
     }
     $seenPeerID[] = DeviceCache::getPrimary()->bgppeers()->where('bgpPeerIdentifier', $bgpPeer['bgpPeerIdentifier'])->where('vrf_id', $vrfId)->select('bgpPeer_id')->orderBy('bgpPeer_id', 'ASC')->first()->bgpPeer_id;
