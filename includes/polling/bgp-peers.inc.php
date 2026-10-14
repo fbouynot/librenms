@@ -98,7 +98,7 @@ if (! empty($peers)) {
                     $data['vrfId'] = $vrfId;
                     $data['peerIdType'] = $peerIdType;
                     $data['ifIndex'] = explode('.', (string) $ifFace)[4];
-                    $peer[$data['bgpPeerIdentifier']] = $data;
+                    $peer[$data['bgpPeerRemoteAddr'] ?? $data['bgpPeerIdentifier']] = $data; // same key as discovery, bgpPeerIdentifier is not unique
 
                     return $peer;
                 });
@@ -468,7 +468,7 @@ if (! empty($peers)) {
                             'bgpPeerIface' => 'bgpPeerIface',
                         ];
                         if ($cumulus_vrf) {
-                            $bgp_peers = array_filter($peer_data_check->toArray(), fn ($peer) => $peer[$peer_identifier] ?? []);
+                            $bgp_peers = array_filter($peer_data_check->toArray(), fn ($peer) => ($peer[$peer_identifier]['vrfId'] ?? null) == $vrfOid);
                             $tmp_data = array_pop($bgp_peers)[$peer_identifier];
                             $peer_data['bgpPeerDescr'] = $tmp_data['bgpPeerDesc'];
                             $peer_data['bgpPeerState'] = $tmp_data['bgpPeerState'];
